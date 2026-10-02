@@ -4,7 +4,7 @@
 #          mingw32-make clean    -> removes build artefacts
 #          mingw32-make run      -> build + run
 # =============================================================================
-
+SHELL := cmd.exe
 CXX      = g++
 CC       = gcc
 

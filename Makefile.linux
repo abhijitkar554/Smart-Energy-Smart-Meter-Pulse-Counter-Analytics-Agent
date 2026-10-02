@@ -1,0 +1,73 @@
+# =============================================================================
+#  Smart Energy Meter — Linux / macOS Makefile
+#
+#  This file is for Linux/macOS only.
+#  On Linux: copy to Makefile  OR  run: make -f Makefile.linux
+#  On Windows use Makefile (mingw32-make) or CMake instead.
+#
+#  Usage:
+#    make -f Makefile.linux              -> build
+#    make -f Makefile.linux clean        -> clean
+#    make -f Makefile.linux run          -> build + run
+#    make -f Makefile.linux run CFG=data/demo_config.json
+# =============================================================================
+
+CXX     = g++
+CC      = gcc
+
+CXXFLAGS = -std=c++14 -O2 -Wall -Wextra \
+           -Iinclude -Ithird_party/sqlite \
+           -DSQLITE_THREADSAFE=1 \
+           -pthread
+
+CFLAGS   = -O2 -DSQLITE_THREADSAFE=1
+
+LDFLAGS  = -pthread
+
+OUT_DIR  = build/bin
+OBJ_DIR  = build/obj
+TARGET   = $(OUT_DIR)/SmartEnergyMeter
+
+SRCS = src/main.cpp            \
+       src/ConfigReader.cpp    \
+       src/PulseCounter.cpp    \
+       src/EnergyMeter.cpp     \
+       src/DataStore.cpp       \
+       src/AnalyticsEngine.cpp \
+       src/AnalyticsAgent.cpp  \
+       src/PulseSimulator.cpp  \
+       src/NightWatchdog.cpp   \
+       src/EnergyChallenge.cpp
+
+SQLITE_SRC = third_party/sqlite/sqlite3.c
+SQLITE_OBJ = $(OBJ_DIR)/sqlite3.o
+OBJS       = $(patsubst src/%.cpp,$(OBJ_DIR)/%.o,$(SRCS))
+
+CFG ?= data/config.json
+
+.PHONY: all dirs run clean
+
+all: dirs $(TARGET)
+	@echo ""
+	@echo "  Build SUCCESS: $(TARGET)"
+	@echo "  Run with:      $(TARGET) $(CFG)"
+	@echo ""
+
+dirs:
+	@mkdir -p $(OBJ_DIR) $(OUT_DIR) data
+
+$(TARGET): $(OBJS) $(SQLITE_OBJ)
+	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
+
+$(OBJ_DIR)/%.o: src/%.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+$(SQLITE_OBJ): $(SQLITE_SRC)
+	$(CC) $(CFLAGS) -Ithird_party/sqlite -w -c -o $@ $<
+
+run: all
+	$(TARGET) $(CFG)
+
+clean:
+	rm -rf build/
+	@echo "  Cleaned."

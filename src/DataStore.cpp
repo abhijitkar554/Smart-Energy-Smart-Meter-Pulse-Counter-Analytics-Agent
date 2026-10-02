@@ -5,7 +5,7 @@
 #include <cmath>
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  DataStore — SQLite persistence layer
+//  DataStore — SQLite persistence layer  (WAL mode)
 // ─────────────────────────────────────────────────────────────────────────────
 
 DataStore::DataStore(const std::string& dbPath) : m_dbPath(dbPath) {}
@@ -19,13 +19,20 @@ bool DataStore::open() {
         nullptr);
 
     if (rc != SQLITE_OK) {
-        std::cerr << "[DB] Open failed: " << sqlite3_errmsg(m_db) << "\n";
-        m_db = nullptr;
+        // BUG FIX #6 / #8: sqlite3_open_v2 can return a non-null handle even
+        // on failure (to allow sqlite3_errmsg() to work).  We must call
+        // sqlite3_errmsg() BEFORE we close/null the handle, then clean up.
+        std::cerr << "[DB] Open failed: "
+                  << (m_db ? sqlite3_errmsg(m_db) : "out of memory") << "\n";
+        if (m_db) {
+            sqlite3_close(m_db);
+            m_db = nullptr;
+        }
         return false;
     }
 
-    // WAL mode for concurrent reads
-    sqlite3_exec(m_db, "PRAGMA journal_mode=WAL;", nullptr, nullptr, nullptr);
+    // WAL mode for concurrent reads; NORMAL sync is safe for logging workloads
+    sqlite3_exec(m_db, "PRAGMA journal_mode=WAL;",  nullptr, nullptr, nullptr);
     sqlite3_exec(m_db, "PRAGMA synchronous=NORMAL;", nullptr, nullptr, nullptr);
 
     createSchema();
@@ -71,8 +78,8 @@ bool DataStore::insertReading(const EnergyMeter::Reading& r) {
 
     const char* sql =
         "INSERT INTO readings "
-        "(meter_id, ts_epoch, energy_kwh, interval_kwh, power_kw, cost, pulse_count) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?);";
+        "(meter_id, ts_epoch, energy_kwh, interval_kwh, power_kw, cost, pulse_count)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?);";
 
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
@@ -91,12 +98,13 @@ bool DataStore::insertReading(const EnergyMeter::Reading& r) {
     return rc == SQLITE_DONE;
 }
 
-bool DataStore::saveMeterState(const std::string& meterId, uint64_t basePulseCount) {
+bool DataStore::saveMeterState(const std::string& meterId,
+                                uint64_t basePulseCount) {
     if (!m_db) return false;
 
     const char* sql =
-        "INSERT OR REPLACE INTO meter_state "
-        "(meter_id, base_pulse_count, last_updated) VALUES (?, ?, ?);";
+        "INSERT OR REPLACE INTO meter_state"
+        " (meter_id, base_pulse_count, last_updated) VALUES (?, ?, ?);";
 
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
@@ -131,14 +139,16 @@ uint64_t DataStore::loadMeterState(const std::string& meterId) {
     return result;
 }
 
-std::vector<DataStore::DailySummary> DataStore::getDailySummaries(int days) const {
+std::vector<DataStore::DailySummary>
+DataStore::getDailySummaries(int days) const {
     std::vector<DailySummary> out;
     if (!m_db) return out;
 
-    std::time_t since = std::time(nullptr) - static_cast<std::time_t>(days) * 86400;
+    std::time_t since = std::time(nullptr)
+                        - static_cast<std::time_t>(days) * 86400;
 
     const char* sql =
-        "SELECT "
+        "SELECT"
         "  (ts_epoch / 86400) * 86400 AS day_epoch,"
         "  SUM(interval_kwh),"
         "  AVG(power_kw),"
@@ -158,7 +168,7 @@ std::vector<DataStore::DailySummary> DataStore::getDailySummaries(int days) cons
 
     while (sqlite3_step(stmt) == SQLITE_ROW) {
         DailySummary ds;
-        ds.date         = static_cast<std::time_t>(sqlite3_column_int64(stmt, 0));
+        ds.date         = static_cast<std::time_t>(sqlite3_column_int64  (stmt, 0));
         ds.totalKwh     = sqlite3_column_double(stmt, 1);
         ds.avgPowerKw   = sqlite3_column_double(stmt, 2);
         ds.peakPowerKw  = sqlite3_column_double(stmt, 3);
@@ -166,7 +176,6 @@ std::vector<DataStore::DailySummary> DataStore::getDailySummaries(int days) cons
         ds.readingCount = sqlite3_column_int   (stmt, 5);
         out.push_back(ds);
     }
-
     sqlite3_finalize(stmt);
     return out;
 }
@@ -176,9 +185,9 @@ DataStore::WindowStats DataStore::getWindowStats(std::time_t since) const {
     if (!m_db) return ws;
 
     const char* sql =
-        "SELECT COUNT(*), SUM(interval_kwh), AVG(interval_kwh), "
-        "       MIN(interval_kwh), MAX(interval_kwh) "
-        "FROM readings WHERE ts_epoch >= ? AND interval_kwh > 0;";
+        "SELECT COUNT(*), SUM(interval_kwh), AVG(interval_kwh),"
+        "       MIN(interval_kwh), MAX(interval_kwh)"
+        " FROM readings WHERE ts_epoch >= ? AND interval_kwh > 0;";
 
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
@@ -188,27 +197,24 @@ DataStore::WindowStats DataStore::getWindowStats(std::time_t since) const {
 
     if (sqlite3_step(stmt) == SQLITE_ROW) {
         ws.sampleCount = sqlite3_column_int   (stmt, 0);
-        double sum     = sqlite3_column_double(stmt, 1);
         ws.meanKwh     = sqlite3_column_double(stmt, 2);
         ws.minKwh      = sqlite3_column_double(stmt, 3);
         ws.maxKwh      = sqlite3_column_double(stmt, 4);
-        (void)sum;
     }
     sqlite3_finalize(stmt);
 
-    // Compute stddev in a second pass
+    // Second pass: sample stddev
     if (ws.sampleCount > 1) {
         const char* sql2 =
-            "SELECT interval_kwh FROM readings "
-            "WHERE ts_epoch >= ? AND interval_kwh > 0;";
+            "SELECT interval_kwh FROM readings"
+            " WHERE ts_epoch >= ? AND interval_kwh > 0;";
         sqlite3_stmt* s2 = nullptr;
         if (sqlite3_prepare_v2(m_db, sql2, -1, &s2, nullptr) == SQLITE_OK) {
             sqlite3_bind_int64(s2, 1, static_cast<sqlite3_int64>(since));
             double sumSq = 0.0;
             int    n     = 0;
             while (sqlite3_step(s2) == SQLITE_ROW) {
-                double v = sqlite3_column_double(s2, 0);
-                double d = v - ws.meanKwh;
+                double d = sqlite3_column_double(s2, 0) - ws.meanKwh;
                 sumSq += d * d;
                 n++;
             }
@@ -216,7 +222,6 @@ DataStore::WindowStats DataStore::getWindowStats(std::time_t since) const {
             sqlite3_finalize(s2);
         }
     }
-
     return ws;
 }
 
@@ -245,8 +250,9 @@ DataStore::getReadingsSince(std::time_t since) const {
     if (!m_db) return out;
 
     const char* sql =
-        "SELECT meter_id, ts_epoch, energy_kwh, interval_kwh, power_kw, cost, pulse_count "
-        "FROM readings WHERE ts_epoch >= ? ORDER BY ts_epoch ASC;";
+        "SELECT meter_id, ts_epoch, energy_kwh, interval_kwh,"
+        "       power_kw, cost, pulse_count"
+        " FROM readings WHERE ts_epoch >= ? ORDER BY ts_epoch ASC;";
 
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
@@ -256,16 +262,16 @@ DataStore::getReadingsSince(std::time_t since) const {
 
     while (sqlite3_step(stmt) == SQLITE_ROW) {
         EnergyMeter::Reading r;
-        r.meterId    = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-        r.ts         = static_cast<std::time_t>(sqlite3_column_int64(stmt, 1));
-        r.energyKwh  = sqlite3_column_double(stmt, 2);
-        r.intervalKwh= sqlite3_column_double(stmt, 3);
-        r.powerKw    = sqlite3_column_double(stmt, 4);
-        r.cost       = sqlite3_column_double(stmt, 5);
-        r.pulseCount = static_cast<uint64_t>(sqlite3_column_int64(stmt, 6));
+        r.meterId     = reinterpret_cast<const char*>(
+                            sqlite3_column_text(stmt, 0));
+        r.ts          = static_cast<std::time_t>(sqlite3_column_int64 (stmt, 1));
+        r.energyKwh   = sqlite3_column_double(stmt, 2);
+        r.intervalKwh = sqlite3_column_double(stmt, 3);
+        r.powerKw     = sqlite3_column_double(stmt, 4);
+        r.cost        = sqlite3_column_double(stmt, 5);
+        r.pulseCount  = static_cast<uint64_t>(sqlite3_column_int64(stmt, 6));
         out.push_back(r);
     }
-
     sqlite3_finalize(stmt);
     return out;
 }

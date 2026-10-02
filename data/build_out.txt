@@ -1,5 +1,0 @@
-
- =====================================================
- Build SUCCESS: build\bin\SmartEnergyMeter.exe
- Run with:      build\bin\SmartEnergyMeter.exe data\config.json
- =====================================================

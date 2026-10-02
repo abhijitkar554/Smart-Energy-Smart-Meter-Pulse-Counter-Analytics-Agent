@@ -1,18 +1,28 @@
-# ── Build artefacts ────────────────────────────────────────────────────────────
+# =============================================================================
+#  Smart Energy Meter — .gitignore
+# =============================================================================
+
+# ── Build artefacts ───────────────────────────────────────────────────────────
 build/
 *.o
 *.a
 *.exe
 *.dll
 
-# ── Database files (runtime data, not source) ──────────────────────────────────
+# ── Runtime data — never commit DB files or log dumps ─────────────────────────
 data/*.db
 data/*.db-wal
 data/*.db-shm
-data/output.txt
-data/run_output.txt
+data/*.txt          # all output/log text files
+data/demo_energy.db
+data/test_energy.db
+data/energy.db
 
-# ── IDE / OS files ─────────────────────────────────────────────────────────────
+# ── Windows helper scripts (hardcode paths / not portable) ───────────────────
+do_push.bat
+run.bat
+
+# ── IDE / OS artefacts ────────────────────────────────────────────────────────
 .vscode/
 .vs/
 *.user
@@ -20,6 +30,6 @@ data/run_output.txt
 .DS_Store
 Thumbs.db
 
-# ── Compiler cache ─────────────────────────────────────────────────────────────
+# ── Compiler pre-compiled headers ─────────────────────────────────────────────
 *.pch
 *.gch
