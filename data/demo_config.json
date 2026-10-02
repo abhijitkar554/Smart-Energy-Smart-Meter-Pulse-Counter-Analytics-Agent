@@ -1,0 +1,21 @@
+{
+    "meter_id":                   "WIPRO-METER-001",
+    "pulses_per_kwh":             1000,
+    "rate_per_kwh":               7.00,
+    "standing_charge":            50.0,
+    "currency":                   "INR",
+    "reading_interval":           3,
+    "report_interval_sec":        6,
+    "run_duration_sec":           15,
+    "cost_alert_threshold":       1500.0,
+    "anomaly_warn_zscore":        2.0,
+    "anomaly_crit_zscore":        3.0,
+    "night_start_hour":           23,
+    "night_end_hour":             5,
+    "night_waste_threshold_kwh":  0.01,
+    "sim_profile":                "DIURNAL",
+    "sim_base_power_kw":          1.5,
+    "sim_peak_multiplier":        4.0,
+    "sim_speed_multiplier":       720.0,
+    "db_path":                    "data/demo_energy.db"
+}

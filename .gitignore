@@ -1,0 +1,25 @@
+# ── Build artefacts ────────────────────────────────────────────────────────────
+build/
+*.o
+*.a
+*.exe
+*.dll
+
+# ── Database files (runtime data, not source) ──────────────────────────────────
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/output.txt
+data/run_output.txt
+
+# ── IDE / OS files ─────────────────────────────────────────────────────────────
+.vscode/
+.vs/
+*.user
+*.suo
+.DS_Store
+Thumbs.db
+
+# ── Compiler cache ─────────────────────────────────────────────────────────────
+*.pch
+*.gch
