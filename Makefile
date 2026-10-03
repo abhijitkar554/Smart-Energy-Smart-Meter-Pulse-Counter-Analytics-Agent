@@ -33,7 +33,9 @@ SRCS = src\main.cpp            \
        src\AnalyticsAgent.cpp  \
        src\PulseSimulator.cpp  \
        src\NightWatchdog.cpp   \
-       src\EnergyChallenge.cpp
+	   src/HardwarePulseReader.cpp \
+       src\EnergyChallenge.cpp \
+
 
 SQLITE_SRC = third_party\sqlite\sqlite3.c
 SQLITE_OBJ = $(OBJ_DIR)\sqlite3.o

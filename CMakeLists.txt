@@ -31,6 +31,7 @@ add_executable(SmartEnergyMeter
     src/PulseSimulator.cpp
     src/NightWatchdog.cpp
     src/EnergyChallenge.cpp
+    src/HardwarePulseReader.cpp
 )
 
 target_include_directories(SmartEnergyMeter PRIVATE include)

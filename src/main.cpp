@@ -29,6 +29,7 @@
 #include "PulseSimulator.h"
 #include "NightWatchdog.h"
 #include "EnergyChallenge.h"
+#include "HardwarePulseReader.h"
 
 // ── Signal flags ──────────────────────────────────────────────────────────────
 static std::atomic<bool> g_stop{false};
@@ -173,16 +174,27 @@ int main(int argc, char* argv[]) {
     double baselineDailyKwh = cfg.simBasePowerKw * 8.0;
     EnergyChallenge challenge(db, baselineDailyKwh);
 
-    // ── Simulator ──────────────────────────────────────────────────────────
+    // ── Pulse source: kernel driver or simulator ───────────────────────────
+    // If /dev/pulse_counter exists (driver loaded), use it directly.
+    // Otherwise fall back to PulseSimulator (development / Windows mode).
+    HardwarePulseReader hwReader(counter);
+    bool useHardware = HardwarePulseReader::devicePresent() && hwReader.open();
+
     PulseSimulator sim(counter,
                        PulseSimulator::fromString(cfg.simProfile),
                        cfg.simBasePowerKw,
                        cfg.simPeakMultiplier,
                        cfg.simSpeedMultiplier);
-    sim.start();
-    std::cout << "[SIM] Pulse simulator started"
-              << "  profile=" << cfg.simProfile
-              << "  speed="   << cfg.simSpeedMultiplier << "x\n";
+
+    if (useHardware) {
+        std::cout << "[HW]  Using /dev/pulse_counter (kernel driver)\n";
+        std::cout << "[HW]  Inject pulses: echo N | sudo tee /dev/pulse_counter\n";
+    } else {
+        sim.start();
+        std::cout << "[SIM] Pulse simulator started"
+                  << "  profile=" << cfg.simProfile
+                  << "  speed="   << cfg.simSpeedMultiplier << "x\n";
+    }
     std::cout << "[RUN] Main loop started."
 #ifndef _WIN32
               << " PID=" << getpid()
@@ -269,6 +281,9 @@ int main(int argc, char* argv[]) {
         if (sinceRead >= cfg.readingIntervalSec) {
             lastReading = now;
 
+            // If using kernel driver, pull latest count before reading
+            if (useHardware) hwReader.sync();
+
             EnergyMeter::Reading reading = meter.takeReading();
             printHeartbeat(reading, cfg.currency);
             db.insertReading(reading);
@@ -309,8 +324,11 @@ int main(int argc, char* argv[]) {
     }
 
     // ── Shutdown ───────────────────────────────────────────────────────────
-    std::cout << "\n[SHUTDOWN] Stopping simulator...\n";
-    sim.stop();
+    std::cout << "\n[SHUTDOWN] Stopping pulse source...\n";
+    if (useHardware)
+        hwReader.close();
+    else
+        sim.stop();
 
     db.saveMeterState(cfg.meterId, counter.getTotalPulses());
     std::cout << "[SHUTDOWN] Meter state saved.\n";
