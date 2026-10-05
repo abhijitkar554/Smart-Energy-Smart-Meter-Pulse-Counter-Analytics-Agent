@@ -3,21 +3,19 @@
 #include <vector>
 #include <string>
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  AnalyticsEngine — statistics, trend, bill forecast, anomaly
-// ─────────────────────────────────────────────────────────────────────────────
+
 class AnalyticsEngine {
 public:
-    // ── Bill Forecast ──────────────────────────────────────────────────────
+
     struct BillForecast {
-        double dailyKwh{0};          // today's average usage so far
-        double monthlyKwh{0};        // projected monthly kWh
-        double estimatedBill{0};     // projected bill in INR
+        double dailyKwh{0};         
+        double monthlyKwh{0};        
+        double estimatedBill{0};    
         int    daysRemaining{0};
         std::string currency{"INR"};
     };
 
-    // ── Anomaly ────────────────────────────────────────────────────────────
+    
     struct AnomalyResult {
         bool   detected{false};
         double zScore{0};
@@ -28,18 +26,18 @@ public:
         std::string message;
     };
 
-    // ── Trend (linear regression over daily totals) ────────────────────────
+    
     struct TrendResult {
-        double slopeKwhPerDay{0};    // +ve = growing, -ve = shrinking
+        double slopeKwhPerDay{0};    
         double interceptKwh{0};
-        double r2{0};                // goodness of fit [0,1]
+        double r2{0};                
         bool   increasing{false};
-        bool   significant{false};   // |slope| > 0.1 kWh/day
+        bool   significant{false};   
     };
 
-    // ── Hourly Pattern ─────────────────────────────────────────────────────
+    
     struct HourlyPattern {
-        double meanKwh[24]{};        // average kWh per hour bucket
+        double meanKwh[24]{};        
         double stddev[24]{};
         int    sampleCount[24]{};
     };
@@ -58,7 +56,7 @@ public:
 
     HourlyPattern buildHourlyPattern(int days = 7) const;
 
-    // Returns 0-100 efficiency score vs historical baseline
+    
     int computeEfficiencyScore(double todayKwh, double baselineKwh) const;
 
 private:
