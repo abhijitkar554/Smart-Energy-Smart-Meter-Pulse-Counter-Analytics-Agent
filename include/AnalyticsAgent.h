@@ -4,19 +4,14 @@
 #include <string>
 #include <vector>
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  AnalyticsAgent — AI reasoning layer: alerts, recommendations, report
-//
-//  BUG FIX #7: cost_alert_threshold and peak_alert_kw are now constructor
-//  parameters so they come from config rather than being hard-coded.
-// ─────────────────────────────────────────────────────────────────────────────
+
 class AnalyticsAgent {
 public:
     enum class AlertLevel { INFO, WARNING, CRITICAL };
 
     struct Alert {
         AlertLevel  level;
-        std::string category;   // ANOMALY | TREND | BILL | DEMAND | NIGHT
+        std::string category;   
         std::string message;
     };
 
@@ -31,7 +26,7 @@ public:
         std::vector<std::string>         recommendations;
     };
 
-    // warnBill / critBill come from cfg.costAlertThreshold (see main.cpp)
+    
     AnalyticsAgent(const AnalyticsEngine& engine,
                    const EnergyMeter&     meter,
                    double warnZScore  = 2.0,
@@ -52,8 +47,8 @@ private:
     const EnergyMeter&     m_meter;
     double m_warnZ;
     double m_critZ;
-    double m_warnBill;   // INR — WARNING threshold
-    double m_critBill;   // INR — CRITICAL threshold
+    double m_warnBill;   
+    double m_critBill;   
     double m_peakAlertKw;
 
     static std::string levelStr(AlertLevel l);
