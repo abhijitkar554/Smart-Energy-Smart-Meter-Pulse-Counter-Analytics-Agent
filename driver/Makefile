@@ -1,8 +1,3 @@
-# =============================================================================
-#  driver/Makefile — Kernel Module Build
-#  Usage: cd driver && make [load|unload|test|clean]
-#  Requires: sudo apt install linux-headers-$(uname -r) build-essential
-# =============================================================================
 
 KERNEL_DIR ?= /lib/modules/$(shell uname -r)/build
 PWD        := $(shell pwd)
