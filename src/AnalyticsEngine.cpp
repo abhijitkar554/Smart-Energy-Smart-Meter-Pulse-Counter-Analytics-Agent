@@ -4,18 +4,11 @@
 #include <algorithm>
 #include <numeric>
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  AnalyticsEngine — statistics, bill forecast, anomaly, trend
-// ─────────────────────────────────────────────────────────────────────────────
+
 
 AnalyticsEngine::AnalyticsEngine(const DataStore& store)
     : m_store(store) {}
 
-// ── Helper: local midnight (IST-aware) ───────────────────────────────────────
-// BUG FIX #3: original code used (time()/86400)*86400 which is UTC midnight.
-// For IST (UTC+5:30) this is 05:30 local time — "today" started 5.5 hours ago,
-// so all readings since midnight local were excluded.  We now use mktime() to
-// reconstruct midnight in the system's local timezone.
 static std::time_t localMidnight() {
     std::time_t now = std::time(nullptr);
     struct tm lt;
@@ -29,12 +22,11 @@ static std::time_t localMidnight() {
     lt.tm_hour = 0;
     lt.tm_min  = 0;
     lt.tm_sec  = 0;
-    lt.tm_isdst = -1;  // let mktime figure out DST
+    lt.tm_isdst = -1;  
     return mktime(&lt);
 }
 
-// ── Bill Forecast ─────────────────────────────────────────────────────────────
-AnalyticsEngine::BillForecast
+
 AnalyticsEngine::computeBillForecast(double ratePerKwh,
                                       double standingCharge,
                                       const std::string& currency) const {
@@ -42,7 +34,7 @@ AnalyticsEngine::computeBillForecast(double ratePerKwh,
     f.currency = currency;
 
     std::time_t now   = std::time(nullptr);
-    std::time_t today = localMidnight();  // FIX: local midnight, not UTC
+    std::time_t today = localMidnight();  
 
     double todayKwh = m_store.getIntervalKwhSince(today);
 
@@ -51,15 +43,15 @@ AnalyticsEngine::computeBillForecast(double ratePerKwh,
 
     f.dailyKwh = (todayKwh / hoursElapsed) * 24.0;
 
-    // Sanity cap: no household uses > 100 kWh/day
+    
     if (f.dailyKwh > 100.0) f.dailyKwh = 100.0;
-    // Very early in the day with near-zero data — show actuals, not projections
+    
     if (hoursElapsed < 1.0 && todayKwh < 0.1) f.dailyKwh = todayKwh;
 
     f.monthlyKwh    = f.dailyKwh * 30.0;
     f.estimatedBill = f.monthlyKwh * ratePerKwh + standingCharge;
 
-    // Days remaining in month
+    
 #ifdef _WIN32
     struct tm* ltm = localtime(&now);
     int dayOfMonth  = ltm ? ltm->tm_mday : 15;
@@ -74,7 +66,7 @@ AnalyticsEngine::computeBillForecast(double ratePerKwh,
     return f;
 }
 
-// ── Anomaly Detection ─────────────────────────────────────────────────────────
+
 AnalyticsEngine::AnomalyResult
 AnalyticsEngine::detectAnomaly(double currentIntervalKwh,
                                 double warnZScore,
@@ -84,7 +76,7 @@ AnalyticsEngine::detectAnomaly(double currentIntervalKwh,
     std::time_t since30 = std::time(nullptr) - 30LL * 86400;
     auto stats = m_store.getWindowStats(since30);
 
-    if (stats.sampleCount < 5) return res;   // not enough history yet
+    if (stats.sampleCount < 5) return res;   
 
     res.meanKwh    = stats.meanKwh;
     res.stddevKwh  = stats.stddevKwh;
@@ -94,7 +86,7 @@ AnalyticsEngine::detectAnomaly(double currentIntervalKwh,
 
     res.zScore = (currentIntervalKwh - stats.meanKwh) / stats.stddevKwh;
 
-    // Hour-of-day context (thread-safe on Linux via localtime_r)
+ 
     std::time_t now = std::time(nullptr);
 #ifdef _WIN32
     struct tm* ltm2 = localtime(&now);
@@ -118,9 +110,7 @@ AnalyticsEngine::detectAnomaly(double currentIntervalKwh,
         res.detected = true;
         char buf[256];
         if (res.hourOfDay >= 2 && res.hourOfDay <= 4) {
-            // BUG FIX #4: original formula was a nonsense expression
-            // (zScore / (stddev/mean+0.001)) * 10.0  — not a real percentage.
-            // Correct formula: (current - mean) / mean * 100
+            
             double pctAbove = (stats.meanKwh > 1e-9)
                 ? ((currentIntervalKwh - stats.meanKwh) / stats.meanKwh * 100.0)
                 : 0.0;
@@ -143,7 +133,7 @@ AnalyticsEngine::detectAnomaly(double currentIntervalKwh,
     return res;
 }
 
-// ── 14-Day Trend (linear regression over daily totals) ────────────────────────
+
 AnalyticsEngine::TrendResult
 AnalyticsEngine::computeTrend(int days) const {
     TrendResult tr;
@@ -167,7 +157,7 @@ AnalyticsEngine::computeTrend(int days) const {
     return tr;
 }
 
-// ── Hourly Pattern (mean ± stddev per hour bucket) ────────────────────────────
+
 AnalyticsEngine::HourlyPattern
 AnalyticsEngine::buildHourlyPattern(int days) const {
     HourlyPattern hp;
@@ -210,12 +200,12 @@ AnalyticsEngine::buildHourlyPattern(int days) const {
     return hp;
 }
 
-// ── Efficiency Score (0-100 vs baseline) ──────────────────────────────────────
+
 int AnalyticsEngine::computeEfficiencyScore(double todayKwh,
                                              double baselineKwh) const {
-    if (baselineKwh < 0.001) return 50;   // no baseline yet
+    if (baselineKwh < 0.001) return 50;  
 
-    // 100 = used nothing, 50 = exactly at baseline, 0 = used 2× baseline
+  
     double ratio = todayKwh / baselineKwh;
     int score = static_cast<int>(100.0 * (2.0 - ratio) / 2.0);
     if (score < 0)   score = 0;
@@ -223,7 +213,7 @@ int AnalyticsEngine::computeEfficiencyScore(double todayKwh,
     return score;
 }
 
-// ── Linear Regression (returns R²) ───────────────────────────────────────────
+
 double AnalyticsEngine::linearRegression(const std::vector<double>& x,
                                           const std::vector<double>& y,
                                           double& slope,
