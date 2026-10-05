@@ -4,15 +4,7 @@
 #include <atomic>
 #include <string>
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  PulseSimulator — background thread that injects pulses into PulseCounter
-//
-//  Profiles:
-//    CONSTANT  -- flat load (good for unit verification)
-//    DIURNAL   -- realistic Indian household: morning peak 6-9 AM,
-//                 evening peak 6-10 PM, low overnight
-//    RANDOM    -- Gaussian random walk around base load
-// ─────────────────────────────────────────────────────────────────────────────
+
 class PulseSimulator {
 public:
     enum class Profile { CONSTANT, DIURNAL, RANDOM };
