@@ -1,15 +1,4 @@
-// =============================================================================
-//  Smart Energy Smart-Meter — Pulse Counter & Analytics Agent
-//  Wipro Embedded Systems Capstone Project
-//
-//  Version : 4.0
-//  Language: C++14
-//  Platform: Linux (primary) / Windows MinGW (secondary)
-//
-//  Signals handled:
-//    SIGINT  / SIGTERM — graceful shutdown
-//    SIGUSR1           — dump an analytics report immediately (Linux only)
-// =============================================================================
+
 
 #include <iostream>
 #include <iomanip>
@@ -31,14 +20,14 @@
 #include "EnergyChallenge.h"
 #include "HardwarePulseReader.h"
 
-// ── Signal flags ──────────────────────────────────────────────────────────────
+
 static std::atomic<bool> g_stop{false};
-static std::atomic<bool> g_dumpReport{false};   // set by SIGUSR1
+static std::atomic<bool> g_dumpReport{false};   
 
 static void sigStop(int)   { g_stop.store(true);       }
 static void sigReport(int) { g_dumpReport.store(true);  }
 
-// ── Local midnight (IST-aware, mirrors AnalyticsEngine helper) ────────────────
+
 static std::time_t localMidnight() {
     std::time_t now = std::time(nullptr);
     struct tm lt;
@@ -53,7 +42,7 @@ static std::time_t localMidnight() {
     return mktime(&lt);
 }
 
-// ── Banner ────────────────────────────────────────────────────────────────────
+
 static void printBanner(const Config& cfg) {
     const std::string sep(62, '=');
     std::cout << "\n" << sep << "\n";
@@ -85,7 +74,7 @@ static void printBanner(const Config& cfg) {
     std::cout << sep << "\n\n";
 }
 
-// ── Heartbeat line ────────────────────────────────────────────────────────────
+
 static void printHeartbeat(const EnergyMeter::Reading& r,
                             const std::string& currency) {
     char tsbuf[32];
@@ -110,26 +99,23 @@ static void printHeartbeat(const EnergyMeter::Reading& r,
               << "\n";
 }
 
-// =============================================================================
-//  main
-// =============================================================================
+
 int main(int argc, char* argv[]) {
-    // ── Signal handlers ────────────────────────────────────────────────────
+    
     std::signal(SIGINT,  sigStop);
     std::signal(SIGTERM, sigStop);
 #ifndef _WIN32
-    // TASK #11: SIGUSR1 triggers an on-demand analytics report dump.
-    // This demonstrates real Linux signal usage beyond a simple stop flag.
+   
     std::signal(SIGUSR1, sigReport);
 #endif
 
-    // ── Config ─────────────────────────────────────────────────────────────
+  
     std::string configPath = (argc > 1) ? argv[1] : "data/config.json";
     Config cfg;
     ConfigReader::load(configPath, cfg);
     printBanner(cfg);
 
-    // ── Core objects ────────────────────────────────────────────────────────
+    
     PulseCounter counter(cfg.pulsesPerKwh);
 
     DataStore db(cfg.dbPath);
@@ -138,7 +124,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Restore pulse count from previous session (reboot recovery)
+  
     uint64_t savedBase = db.loadMeterState(cfg.meterId);
     if (savedBase > 0) {
         counter.setBaseCount(savedBase);
@@ -156,9 +142,7 @@ int main(int argc, char* argv[]) {
 
     AnalyticsEngine analytics(db);
 
-    // BUG FIX #7: pass costAlertThreshold from config into the agent so bill
-    // alert thresholds are configurable, not hard-coded.
-    // warnBill = costAlertThreshold, critBill = 1.5 × costAlertThreshold
+   
     AnalyticsAgent agent(analytics, meter,
                          cfg.anomalyWarnZScore,
                          cfg.anomalyCritZScore,
@@ -174,9 +158,7 @@ int main(int argc, char* argv[]) {
     double baselineDailyKwh = cfg.simBasePowerKw * 8.0;
     EnergyChallenge challenge(db, baselineDailyKwh);
 
-    // ── Pulse source: kernel driver or simulator ───────────────────────────
-    // If /dev/pulse_counter exists (driver loaded), use it directly.
-    // Otherwise fall back to PulseSimulator (development / Windows mode).
+   
     HardwarePulseReader hwReader(counter);
     bool useHardware = HardwarePulseReader::devicePresent() && hwReader.open();
 
@@ -202,7 +184,7 @@ int main(int argc, char* argv[]) {
 #endif
               << "\n\n";
 
-    // ── Timing ────────────────────────────────────────────────────────────
+ 
     using Clock = std::chrono::steady_clock;
     auto startWall   = Clock::now();
     auto lastReading = startWall;
@@ -213,7 +195,7 @@ int main(int argc, char* argv[]) {
     bool hadNightAlert = false;
     bool hadAnomaly    = false;
 
-    // ── Helper lambda: run and print a full analytics report ───────────────
+  
     auto doReport = [&]() {
         reportCount++;
         EnergyMeter::Reading snap = meter.lastReading();
@@ -224,7 +206,7 @@ int main(int argc, char* argv[]) {
                                      cfg.currency);
         AnalyticsAgent::printReport(report);
 
-        // Night watchdog
+        
         auto nightRpt = nightdog.evaluate();
         if (nightRpt.alertTriggered) {
             hadNightAlert = true;
@@ -240,8 +222,7 @@ int main(int argc, char* argv[]) {
                       << nightRpt.averageNightKwh << " kWh\n";
         }
 
-        // Energy challenge score card
-        // BUG FIX #3 (main.cpp side): use local midnight, not UTC midnight
+      
         double todayKwh = db.getIntervalKwhSince(localMidnight());
         if (todayKwh <= 0.0) todayKwh = snap.energyKwh;
 
@@ -262,11 +243,11 @@ int main(int argc, char* argv[]) {
         hadAnomaly    = false;
     };
 
-    // ── Main loop ─────────────────────────────────────────────────────────
+    
     while (!g_stop.load()) {
         auto now = Clock::now();
 
-        // Check run duration
+        
         auto elapsedSec = std::chrono::duration_cast<std::chrono::seconds>(
                               now - startWall).count();
         if (cfg.runDurationSec > 0 && elapsedSec >= cfg.runDurationSec) {
@@ -275,13 +256,13 @@ int main(int argc, char* argv[]) {
             break;
         }
 
-        // ── Reading interval ───────────────────────────────────────────────
+       
         auto sinceRead = std::chrono::duration_cast<std::chrono::seconds>(
                              now - lastReading).count();
         if (sinceRead >= cfg.readingIntervalSec) {
             lastReading = now;
 
-            // If using kernel driver, pull latest count before reading
+           
             if (useHardware) hwReader.sync();
 
             EnergyMeter::Reading reading = meter.takeReading();
@@ -298,15 +279,14 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // ── DB state save every 60 s ───────────────────────────────────────
-        auto sinceDBSave = std::chrono::duration_cast<std::chrono::seconds>(
+     
                                now - lastDBSave).count();
         if (sinceDBSave >= 60) {
             lastDBSave = now;
             db.saveMeterState(cfg.meterId, counter.getTotalPulses());
         }
 
-        // ── Scheduled report interval ──────────────────────────────────────
+      
         auto sinceReport = std::chrono::duration_cast<std::chrono::seconds>(
                                now - lastReport).count();
         if (sinceReport >= cfg.reportIntervalSec) {
@@ -314,7 +294,7 @@ int main(int argc, char* argv[]) {
             doReport();
         }
 
-        // ── SIGUSR1: on-demand report (Linux system programming, task #11) ──
+        
         if (g_dumpReport.exchange(false)) {
             std::cout << "\n[SIGNAL] SIGUSR1 received — dumping report now.\n";
             doReport();
@@ -323,7 +303,7 @@ int main(int argc, char* argv[]) {
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }
 
-    // ── Shutdown ───────────────────────────────────────────────────────────
+    
     std::cout << "\n[SHUTDOWN] Stopping pulse source...\n";
     if (useHardware)
         hwReader.close();
