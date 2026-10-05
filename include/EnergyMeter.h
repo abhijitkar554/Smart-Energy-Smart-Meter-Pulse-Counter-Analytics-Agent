@@ -6,24 +6,22 @@
 #include <string>
 #include <ctime>
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  EnergyMeter — tariff, interval readings, peak/min demand tracking
-// ─────────────────────────────────────────────────────────────────────────────
+
 class EnergyMeter {
 public:
     struct TariffConfig {
-        double      ratePerKwh     = 7.00;    // INR/kWh
-        double      standingCharge = 50.0;    // INR/month fixed
+        double      ratePerKwh     = 7.00;   
+        double      standingCharge = 50.0;    
         std::string currency       = "INR";
     };
 
     struct Reading {
         std::string meterId;
         std::time_t ts{0};
-        double      energyKwh{0};     // cumulative kWh
-        double      intervalKwh{0};   // delta since last reading
-        double      powerKw{0};       // average power over interval
-        double      cost{0};          // cumulative cost
+        double      energyKwh{0};    
+        double      intervalKwh{0};
+        double      powerKw{0};      
+        double      cost{0};         
         uint64_t    pulseCount{0};
     };
 
@@ -32,14 +30,13 @@ public:
     void         setTariff(const TariffConfig& t);
     TariffConfig getTariff() const;
 
-    // Snap a reading (thread-safe). Only call once per intended reading point.
-    // Returns the last reading without advancing if called twice in same second.
+   
     Reading takeReading();
 
-    // Peek the most recent reading without taking a new one
+   
     Reading lastReading() const;
 
-    // Drain all pending readings (for DataStore batch insert)
+
     std::vector<Reading> drainPendingReadings();
 
     double getTotalCost()   const;
@@ -56,7 +53,7 @@ private:
     mutable std::mutex m_readMutex;
 
     double      m_prevEnergyKwh{0};
-    // Use steady_clock for sub-second interval precision
+  
     std::chrono::steady_clock::time_point m_prevTime;
     bool        m_firstReading{true};
 
