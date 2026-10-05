@@ -4,13 +4,11 @@
 #include <string>
 #include <vector>
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  DataStore — SQLite persistence (WAL mode)
-// ─────────────────────────────────────────────────────────────────────────────
+
 class DataStore {
 public:
     struct DailySummary {
-        std::time_t date{0};        // epoch of midnight
+        std::time_t date{0};        
         double totalKwh{0};
         double avgPowerKw{0};
         double peakPowerKw{0};
@@ -33,19 +31,19 @@ public:
     void close();
     bool isOpen() const { return m_db != nullptr; }
 
-    // Persist readings
+    
     bool insertReading(const EnergyMeter::Reading& r);
 
-    // Persist meter state (base pulse count for reboot recovery)
+    
     bool saveMeterState(const std::string& meterId, uint64_t basePulseCount);
     uint64_t loadMeterState(const std::string& meterId);
 
-    // Query helpers
+    
     std::vector<DailySummary> getDailySummaries(int days = 30) const;
     WindowStats  getWindowStats(std::time_t since) const;
     double       getIntervalKwhSince(std::time_t since) const;
 
-    // Raw recent readings (for hourly pattern analysis)
+    
     std::vector<EnergyMeter::Reading> getReadingsSince(std::time_t since) const;
 
 private:
