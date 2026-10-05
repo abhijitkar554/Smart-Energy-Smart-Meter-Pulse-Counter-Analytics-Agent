@@ -5,13 +5,7 @@
 #include <ctime>
 #include <cmath>
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  AnalyticsAgent — AI reasoning layer over AnalyticsEngine outputs
-//
-//  BUG FIX #7: bill alert thresholds (warnBill, critBill) and peak demand
-//  threshold (peakAlertKw) are now injected from Config rather than
-//  hard-coded as magic numbers 1200 / 2000 / 5.0.
-// ─────────────────────────────────────────────────────────────────────────────
+
 
 AnalyticsAgent::AnalyticsAgent(const AnalyticsEngine& engine,
                                 const EnergyMeter&     meter,
@@ -25,7 +19,7 @@ AnalyticsAgent::AnalyticsAgent(const AnalyticsEngine& engine,
       m_warnBill(warnBillINR), m_critBill(critBillINR),
       m_peakAlertKw(peakAlertKw) {}
 
-// ── Generate Report ───────────────────────────────────────────────────────────
+
 AnalyticsAgent::Report
 AnalyticsAgent::generate(const EnergyMeter::Reading& latest,
                           double ratePerKwh,
@@ -40,7 +34,7 @@ AnalyticsAgent::generate(const EnergyMeter::Reading& latest,
     rpt.trend   = m_engine.computeTrend(14);
     rpt.anomaly = m_engine.detectAnomaly(latest.intervalKwh, m_warnZ, m_critZ);
 
-    // ── 1. Bill alert (thresholds from config via constructor) ─────────────
+    
     double bill = rpt.bill.estimatedBill;
     if (bill > m_critBill) {
         char buf[256];
@@ -58,7 +52,7 @@ AnalyticsAgent::generate(const EnergyMeter::Reading& latest,
         rpt.alerts.push_back({AlertLevel::WARNING, "BILL", buf});
     }
 
-    // ── 2. Anomaly alert ───────────────────────────────────────────────────
+   
     if (rpt.anomaly.detected) {
         AlertLevel lv = (std::abs(rpt.anomaly.zScore) >= m_critZ)
                         ? AlertLevel::CRITICAL : AlertLevel::WARNING;
@@ -66,7 +60,7 @@ AnalyticsAgent::generate(const EnergyMeter::Reading& latest,
             "[APPLIANCE ANOMALY] " + rpt.anomaly.message});
     }
 
-    // ── 3. Trend alert ────────────────────────────────────────────────────
+    
     if (rpt.trend.significant) {
         char buf[128];
         if (rpt.trend.increasing) {
@@ -82,7 +76,7 @@ AnalyticsAgent::generate(const EnergyMeter::Reading& latest,
         }
     }
 
-    // ── 4. Peak demand alert (threshold from config) ───────────────────────
+    
     double peak = m_meter.getPeakPowerKW();
     if (peak > m_peakAlertKw) {
         char buf[128];
@@ -93,7 +87,7 @@ AnalyticsAgent::generate(const EnergyMeter::Reading& latest,
         rpt.alerts.push_back({AlertLevel::WARNING, "DEMAND", buf});
     }
 
-    // ── Recommendations ────────────────────────────────────────────────────
+    
     if (rpt.trend.increasing)
         rpt.recommendations.push_back(
             "Consumption trending up. Audit AC, water heater, washing machine.");
@@ -112,7 +106,7 @@ AnalyticsAgent::generate(const EnergyMeter::Reading& latest,
     return rpt;
 }
 
-// ── Print Report ──────────────────────────────────────────────────────────────
+
 void AnalyticsAgent::printReport(const Report& r) {
     const std::string sep(62, '=');
     const std::string dash(62, '-');
@@ -178,7 +172,7 @@ void AnalyticsAgent::printReport(const Report& r) {
     std::cout << sep << "\n";
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+
 std::string AnalyticsAgent::levelStr(AlertLevel l) {
     switch (l) {
         case AlertLevel::INFO:     return "INFO    ";
